@@ -4,8 +4,7 @@ import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 from jax import vmap
-import equinox as eqx
-from equinox import nn
+import treex as tx
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -16,7 +15,7 @@ def sdf_sphere(x):
     return jnp.dot(x, x) - 1
 
 
-@eqx.filter_jit
+@ft.partial(jax.jit, static_argnums=(0,2))
 def discretize2d(sdf, xy_lims, ngrid):
     xs = jnp.meshgrid(jnp.linspace(*xy_lims, ngrid), 
                       jnp.linspace(*xy_lims, ngrid))
@@ -45,8 +44,7 @@ def plot2d(sdf, xy_lims=(-2,2), ngrid=10):
     plt.tight_layout()
 
 
-
-@eqx.filter_jit
+@ft.partial(jax.jit, static_argnums=(0,2))
 def discretize3d(sdf, xyz_lims, ngrid):
     xs = jnp.meshgrid(jnp.linspace(*xyz_lims, ngrid),
                       jnp.linspace(*xyz_lims, ngrid),
@@ -71,34 +69,6 @@ def plot3d(sdf, xyz_lims=(-2,2), ngrid=10):
     plt.tight_layout()
 
 
-class NeuralSDF(eqx.Module):
-    layers: Sequence[nn.Linear]
-    activation: Callable
-
-    def __init__(
-        self, 
-        in_size: int, 
-        width_size: int,
-        depth: int,
-        *,
-        activation: Callable=jax.nn.relu,
-        key: jrandom.PRNGKey,
-    ):
-        keys = jrandom.split(key, depth + 1)
-        layers = [nn.Linear(in_size, width_size, key=keys[0])]
-        for i in range(depth - 1):
-            layers += [nn.Linear(width_size, width_size, key=keys[i+1])]
-        layers += [nn.Linear(width_size, 1, key=keys[-1])]
-        self.layers = layers
-        self.activation = activation
-
-    def __call__(self, x):
-        for layer in self.layers[:-1]:
-            x = layer(x)
-            x = self.activation(x)
-        y = self.layers[-1](x)
-        return y[0]
-
 def dataloader(xs, ys, batch_size, *, key):
     dataset_size = xs.shape[0]
     indices = jnp.arange(dataset_size)
@@ -113,17 +83,33 @@ def dataloader(xs, ys, batch_size, *, key):
             start = end
             end = start + batch_size
 
-def single_loss_fn(model, x, y):
-    return 0.5 * jnp.square(y - model(x))
+class SimpleNeuralSDF(tx.Module):
+    def __init__(self, dims: Sequence[int], act: Callable):
+        self.dims = dims
+        self.act = act
+    @tx.compact
+    def __call__(self, x):
+        assert x.ndim == 1
+        for dim in self.dims:
+            x = tx.Linear(dim)(x)
+            x = self.act(x)
+        y = tx.Linear(1)(x)
+        return y[0]
+    
+@ft.partial(jax.value_and_grad, has_aux=True)
+def loss_fn(params, model, x, y):
+    model = model.merge(params)
+    preds = jax.vmap(model)(x)
+    loss = 0.5 * jnp.mean((preds - y) ** 2)
+    return loss, model
 
-def batch_loss_fn(model, xs, ys):
-    loss_fn = ft.partial(single_loss_fn, model)
-    return jnp.mean(vmap(loss_fn)(xs, ys))
+@jax.jit
+def train_step(model, x, y, optimizer):
+    params = model.filter(tx.Parameter)
+    (loss, model), grads = loss_fn(params, model, x, y)
+    new_params = optimizer.update(grads, params)
+    model = model.merge(new_params)
+    return loss, model, optimizer
 
-@eqx.filter_jit
-def make_step(model, xs, ys, opt_state, opt_update):
-    loss_fn = eqx.filter_value_and_grad(batch_loss_fn)
-    loss, grads = loss_fn(model, xs, ys)
-    updates, opt_state = opt_update(grads, opt_state)
-    model = eqx.apply_updates(model, updates)
-    return loss, model, opt_state
+def print_callback(step, loss, model, optimizer):
+    print(f"[{step}] loss: {loss:.4f}")
