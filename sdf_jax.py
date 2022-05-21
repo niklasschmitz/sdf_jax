@@ -100,7 +100,8 @@ class SimpleNeuralSDF(tx.Module):
 def loss_fn(params, model, x, y):
     model = model.merge(params)
     preds = jax.vmap(model)(x)
-    loss = 0.5 * jnp.mean((preds - y) ** 2)
+    # loss = 0.5 * jnp.mean((preds - y) ** 2)
+    loss = jnp.mean(jnp.abs(preds - y) / (jnp.abs(y) + 0.01))
     return loss, model
 
 @jax.jit
