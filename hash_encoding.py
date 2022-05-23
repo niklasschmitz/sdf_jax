@@ -4,6 +4,7 @@ import jax.random as jrandom
 from jax.config import config
 config.update("jax_enable_x64", True)  # TODO how to embrace int32 overflow for hashing in JAX?
 import numpy as np
+import functools as ft
 
 def hash_vertex(v, hashmap_size):
     # TODO how to embrace int32 overflow in JAX?
@@ -43,7 +44,7 @@ def unit_box(dim: int):
     elif dim == 3: return np.array([[i,j,k] for i in (0,1) for j in (0,1) for k in (0,1)], dtype=jnp.uint64)
     else: assert False
 
-@jax.jit
+@ft.partial(jax.jit, static_argnames=("nmin", "nmax"))
 def encode(x, theta, nmin=16, nmax=512):
     assert x.ndim == 1
     levels, hashmap_size, features_per_entry = theta.shape
