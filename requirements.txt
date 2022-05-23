@@ -1,0 +1,6 @@
+jax==0.3.10
+jaxlib==0.3.10
+numpy
+matplotlib
+optax
+treex
