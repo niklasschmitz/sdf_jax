@@ -2,14 +2,13 @@ import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 from jax.config import config
-config.update("jax_enable_x64", True)  # TODO how to embrace int32 overflow for hashing in JAX?
 import numpy as np
 import functools as ft
 
+
 def hash_vertex(v, hashmap_size):
-    # TODO how to embrace int32 overflow in JAX?
-    primes = [1, 2654435761, 805459861]
-    h = 0
+    primes = jnp.array([1, 2654435761, 805459861], dtype=jnp.uint32)
+    h = jnp.uint32(0)
     for i in range(len(v)):
         h ^= v[i] * primes[i]
     return h % hashmap_size
@@ -40,8 +39,8 @@ def interpolate_dlinear(values, weights):
     else: assert False
 
 def unit_box(dim: int):
-    if dim == 2: return np.array([[i,j] for i in (0,1) for j in (0,1)], dtype=jnp.uint64)
-    elif dim == 3: return np.array([[i,j,k] for i in (0,1) for j in (0,1) for k in (0,1)], dtype=jnp.uint64)
+    if dim == 2: return np.array([[i,j] for i in (0,1) for j in (0,1)], dtype=jnp.uint32)
+    elif dim == 3: return np.array([[i,j,k] for i in (0,1) for j in (0,1) for k in (0,1)], dtype=jnp.uint32)
     else: assert False
 
 @ft.partial(jax.jit, static_argnames=("nmin", "nmax"))
@@ -53,7 +52,7 @@ def encode(x, theta, nmin=16, nmax=512):
     def features(l):
         nl = jnp.floor(nmin * b**l)
         xl = x * nl
-        xl_ = jnp.floor(xl).astype(jnp.uint64)
+        xl_ = jnp.floor(xl).astype(jnp.uint32)
 
         # hash voxel vertices
         indices = jax.vmap(lambda v: hash_vertex(xl_ + v, hashmap_size))(box)
@@ -66,7 +65,7 @@ def encode(x, theta, nmin=16, nmax=512):
         xi = interpolate_dlinear(tl, wl)
 
         return xi
-    return jax.lax.map(features, np.arange(levels, dtype=jnp.uint64))
+    return jax.lax.map(features, np.arange(levels, dtype=jnp.uint32))
 
 def init_encoding(
     key,
