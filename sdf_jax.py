@@ -23,7 +23,7 @@ def discretize2d(sdf, xy_lims, ngrid):
     ys = vmap(vmap(sdf))(xs)
     return xs, ys
 
-def plot2d(sdf, xy_lims=(-2,2), ngrid=10):
+def plot2d(sdf, xy_lims=(0,1), ngrid=10):
     xs, ys = discretize2d(sdf, xy_lims, ngrid)
     # fig, axs = plt.subplots(ncols=2, figsize=(6,3))
     fig = plt.figure(figsize=(6.25,3))
@@ -53,10 +53,10 @@ def discretize3d(sdf, xyz_lims, ngrid):
     ys = vmap(vmap(vmap(sdf)))(xs)
     return xs, ys
 
-def plot3d(sdf, xyz_lims=(-2,2), ngrid=10):
+def plot3d(sdf, xyz_lims=(0, 1), ngrid=10):
     xs, ys = discretize3d(sdf, xyz_lims, ngrid)
     verts, faces, normals, values = measure.marching_cubes(np.array(ys), 0)
-    verts = (verts / 10) * 4 - 2
+    verts = (verts / ngrid) * abs(xyz_lims[0] - xyz_lims[1]) + xyz_lims[0]
 
     fig = plt.figure(figsize=(6, 6))
     ax = fig.add_subplot(111, projection='3d')
