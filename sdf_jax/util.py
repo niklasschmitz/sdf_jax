@@ -1,28 +1,31 @@
 from sdf_jax.discretize import discretize2d, discretize3d
 
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from skimage import measure
 
 
 def plot2d(sdf, xy_lims=(0,1), ngrid=10):
     xs, ys = discretize2d(sdf, xy_lims, ngrid)
-    fig = plt.figure(figsize=(6.25,3))
-    gs = plt.GridSpec(1,3, width_ratios=[3,3,0.25])
-    ax0 = plt.subplot(gs[0])
-    ax1 = plt.subplot(gs[1])
-    ax2 = plt.subplot(gs[2])
-    c = ax0.imshow(ys, origin='lower')
-    ax0.set_title("SDF")
-    ax1.contour(ys, levels=[0.])
-    ax1.set_title("zero levelset")
-    for ax in [ax0, ax1]:
-        ax.set_xticks([0,ngrid-1])
-        ax.set_xticklabels(xy_lims)
-        ax.set_yticks([0,ngrid-1])
-        ax.set_yticklabels(xy_lims)
-    plt.colorbar(c, cax=ax2)
+    fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(6, 3))
+    ax0.set_title("zero levelset")
+    ax0.contour(xs[:,:,0], xs[:,:,1], ys, levels=[0.], colors=["salmon"])
+    ax0.set_xticks(xy_lims)
+    ax0.set_yticks(xy_lims)
+    ax1.set_title("SDF")
+    c = ax1.imshow(ys, origin='lower')
+    ax1.contour(ys, levels=[0.], colors=["salmon"])
+    ax1.set_xticks([0,ngrid-1])
+    ax1.set_xticklabels(xy_lims)
+    ax1.set_yticks([0,ngrid-1])
+    ax1.set_yticklabels(xy_lims)
+    divider = make_axes_locatable(plt.gca())
+    cax = divider.append_axes("right", "5%", pad="3%")
+    plt.colorbar(c, cax=cax)
     plt.tight_layout()
+    plt.close()
+    return fig
 
 def plot3d(sdf, xyz_lims=(0, 1), ngrid=10):
     xs, ys = discretize3d(sdf, xyz_lims, ngrid)
