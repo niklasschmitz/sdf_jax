@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "neuralsdf_jax"
+name = "sdf_jax"
 version = "0.1.0"
 description = "Experiments constructing Neural Signed Distance Functions in JAX"
 authors = ["Niklas Schmitz <niklas.f.schmitz@gmail.com>"]
