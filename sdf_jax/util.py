@@ -3,9 +3,9 @@ from sdf_jax.discretize import discretize2d, discretize3d
 import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
+import trimesh
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from skimage import measure
 
 
@@ -37,18 +37,7 @@ def plot3d(sdf, xyz_lims=(0, 1), ngrid=10):
     xs, ys = discretize3d(sdf, xyz_lims, ngrid)
     verts, faces, normals, values = measure.marching_cubes(np.array(ys), 0)
     verts = (verts / ngrid) * abs(xyz_lims[0] - xyz_lims[1]) + xyz_lims[0]
-
-    fig = plt.figure(figsize=(6, 6))
-    ax = fig.add_subplot(111, projection='3d')
-    mesh = Poly3DCollection(verts[faces])
-    mesh.set_edgecolor('k')
-    ax.add_collection3d(mesh)
-    ax.set_xlim(*xyz_lims)
-    ax.set_ylim(*xyz_lims)
-    ax.set_zlim(*xyz_lims)
-    plt.tight_layout()
-    plt.close()
-    return fig
+    return trimesh.Trimesh(vertices=verts, faces=faces, process=False).show()
 
 def dataloader(xs, ys, batch_size, *, key):
     dataset_size = xs.shape[0]
