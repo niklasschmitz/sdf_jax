@@ -14,6 +14,7 @@ optax = "^0.1.2"
 numpy = "^1.22.4"
 tqdm = "^4.64.0"
 scikit-image = "^0.19.2"
+trimesh = "^3.12.6"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.1.2"
