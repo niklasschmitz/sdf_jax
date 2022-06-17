@@ -44,9 +44,9 @@ def unit_box(dim: int):
 
 @ft.partial(jax.jit, static_argnames=("nmin", "nmax"))
 def encode(x, theta, nmin=16, nmax=512):
-    assert x.ndim == 1
+    input_dim, = x.shape
     levels, hashmap_size, features_per_entry = theta.shape
-    box = unit_box(x.shape[0])
+    box = unit_box(input_dim)
     b = np.exp((np.log(nmax) - np.log(nmin)) / (levels - 1))
     def features(l):
         nl = jnp.floor(nmin * b**l)
