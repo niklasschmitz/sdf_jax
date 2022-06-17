@@ -50,6 +50,9 @@ def dataloader(xs, ys, batch_size, *, key):
         end = batch_size
         while end <= dataset_size:
             batch_perm = perm[start:end]
-            yield xs[batch_perm], ys[batch_perm]
+            if ys is not None:
+                yield xs[batch_perm], ys[batch_perm]
+            else:
+                yield xs[batch_perm], None
             start = end
             end = start + batch_size
