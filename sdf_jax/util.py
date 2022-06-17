@@ -42,12 +42,13 @@ def plot3d(sdf, xyz_lims=(0, 1), ngrid=10):
 def dataloader(xs, ys, batch_size, *, key):
     dataset_size = xs.shape[0]
     indices = jnp.arange(dataset_size)
+    assert batch_size <= dataset_size
     while True:
         perm = jrandom.permutation(key, indices)
         (key,) = jrandom.split(key, 1)
         start = 0
         end = batch_size
-        while end < dataset_size:
+        while end <= dataset_size:
             batch_perm = perm[start:end]
             yield xs[batch_perm], ys[batch_perm]
             start = end
