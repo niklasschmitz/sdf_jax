@@ -19,7 +19,7 @@ def plot2d(sdf, *, ngrid=10, x_lims=(0, 1), y_lims=None, scatter_pts=None):
     ax0.set_xticks(x_lims)
     ax0.set_yticks(y_lims)
     ax1.set_title("SDF")
-    c = ax1.contourf(xs[:,:,0], xs[:,:,1], ys, levels=np.arange(-1,1,0.1))
+    c = ax1.contourf(xs[:,:,0], xs[:,:,1], ys, levels=20)
     ax1.contour(xs[:,:,0], xs[:,:,1], ys, levels=[0.], colors=["w"])
     if scatter_pts is not None:
         ax0.scatter(*scatter_pts.T)
