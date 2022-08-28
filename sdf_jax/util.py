@@ -9,11 +9,11 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from skimage import measure
 
 
-def plot2d(sdf, *, ngrid=10, x_lims=(0, 1), y_lims=None, scatter_pts=None):
+def plot2d(sdf, *, ngrid=10, x_lims=(0, 1), y_lims=None, scatter_pts=None, figsize=(6, 3)):
     if y_lims is None:
         y_lims = x_lims
     xs, ys = discretize2d(sdf, ngrid, x_lims, y_lims)
-    fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(6, 3))
+    fig, (ax0, ax1) = plt.subplots(1, 2, figsize=figsize)
     ax0.set_title("zero levelset")
     ax0.contour(xs[:,:,0], xs[:,:,1], ys, levels=[0.], colors=["salmon"])
     ax0.set_xticks(x_lims)
