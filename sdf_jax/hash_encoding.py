@@ -44,6 +44,24 @@ def unit_box(dim: int):
 
 @ft.partial(jax.jit, static_argnames=("nmin", "nmax"))
 def encode(x, theta, nmin=16, nmax=512):
+    """Multiresolution Hash Encoding.
+
+    Following the paper:
+        Instant Neural Graphics Primitives with a Multiresolution Hash Encoding
+        Thomas Müller, Alex Evans, Christoph Schied, Alexander Keller
+        ACM Transactions on Graphics (SIGGRAPH), July 2022
+
+    The present code takes only a single input vector in 2D or 3D to encode.
+    If you need to encode large batches of inputs jointly, consider
+    wrapping this function with `jax.vmap`.
+
+    Args:
+        x:     Float[input_dim]
+        theta: Float[levels, hashmap_size, features_per_entry]
+
+    Returns:
+        Float[levels, features_per_entry]
+    """
     input_dim, = x.shape
     levels, hashmap_size, features_per_entry = theta.shape
     box = unit_box(input_dim)
