@@ -1,6 +1,16 @@
 # sdf_jax
 
-Neural signed distance functions in JAX.
+Utilities for neural signed distance fields in JAX.
+
+## Content
+
+```
+sdf_jax
+    ├── discretize.py     # utils for dense 2D and 3D grid evaluation of a field
+    ├── examples.py       # for debugging: simple analytical SDFs like the sphere
+    ├── hash_encoding.py  # Multiresolution Hash Encoding
+    └── util.py           # plotting utils for level-sets from marching cubes
+```
 
 ## Installation
 To ensure reproducibility, to install this repo and its dev dependencies: 
