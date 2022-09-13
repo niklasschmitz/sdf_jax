@@ -121,6 +121,7 @@ if __name__=='__main__':
 
     save_every = 1000
     save_path = Path(".")
+    save_path.mkdir(parents=True, exist_ok=True)
 
     def save_callback(step, loss, model, optimizer):
         print_callback(step, loss, model, optimizer)
