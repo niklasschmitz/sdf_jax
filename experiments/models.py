@@ -58,6 +58,13 @@ class HashEmbedding(tx.Module):
         return y.reshape(-1)
 
 
+def build_hash_mlp(emb_kwargs, hidden, act):
+    model = tx.Sequential(
+        HashEmbedding(**emb_kwargs),
+        MLP([hidden, hidden], act),
+    )
+    return model
+
 ###############################################################
 # Implicit Geometric Regularization for Learning Shapes
 # (Gropp et al, ICML 2020)
@@ -114,8 +121,8 @@ class IGRModel(tx.Module):
     def __call__(self, x):
         assert x.ndim == 1
 
-        # x is assumed in [0,1]^2
-        # we now rescale to [-1,1]^2 for geometric init to work
+        # x is assumed in [0,1]^d
+        # we now rescale to [-1,1]^d for geometric init to work
         x = 2*x - 1.0
 
         y = x
@@ -127,7 +134,7 @@ class IGRModel(tx.Module):
             y = self.act(y)
         y = self.final_layer(y)
 
-        # rescaling values too to fit [0,1]^2 instead of [-1,1]
+        # rescaling values too to fit [0,1]^d instead of [-1,1]^d
         y = y / 2.0
 
         return y[0]
