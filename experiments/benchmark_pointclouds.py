@@ -119,8 +119,8 @@ if __name__=='__main__':
 
     model = module.init(key=jrandom.PRNGKey(0), inputs=data["position"][0])
 
-    save_every = 1000
-    save_path = Path(".")
+    save_every = 2000
+    save_path = Path("checkpoints")
     save_path.mkdir(parents=True, exist_ok=True)
 
     def save_callback(step, loss, model, optimizer):
@@ -133,8 +133,8 @@ if __name__=='__main__':
         module,
         xs=data["position"],
         normals=data["gradient"],
-        steps=1000,       # 100_000
-        batch_size=128, # 128**2
+        steps=10_000,       # 100_000
+        batch_size=128**2, # 128**2
         cb_every=50,
         cb=save_callback,
     )
