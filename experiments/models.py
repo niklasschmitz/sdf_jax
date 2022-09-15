@@ -31,7 +31,7 @@ class HashEmbedding(tx.Module):
     def __init__(
         self, 
         levels: int=16, 
-        hashmap_size_log2: int=14, 
+        hashmap_size_log2: int=20, 
         features_per_entry: int=2,
         nmin: int=16,
         nmax: int=512,
