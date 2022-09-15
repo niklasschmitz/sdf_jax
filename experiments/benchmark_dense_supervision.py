@@ -15,7 +15,7 @@ from models import IGRModel, build_hash_mlp, IDFModel
 from sdf_jax.util import extract_mesh3d
 
 
-def load_points(path):
+def load_points(key, path):
     """Loads a dataset from https://github.com/tovacinni/sdf-explorer"""
     data_npz = jnp.load(path)
     data = {}
@@ -31,7 +31,13 @@ def load_points(path):
     data["position"] = data["position"][valid_indices]
     data["distance"] = data["distance"][valid_indices]
     data["gradient"] = data["gradient"][valid_indices]
-    return data
+    indices = jnp.arange(len(data["position"]))
+    shuffled_indices = jrandom.permutation(key, indices)
+    n_train = len(shuffled_indices) // 10
+    train_indices, test_indices = shuffled_indices[:n_train], shuffled_indices[n_train:]
+    data_train = jax.tree_map(lambda x: x[train_indices], data)
+    data_test = jax.tree_map(lambda x: x[test_indices], data)
+    return data_train, data_test
 
 def dataloader(xs, ys, normals, batch_size, *, key):
     dataset_size = xs.shape[0]
@@ -134,8 +140,11 @@ if __name__=='__main__':
     )
     logging.info(args)
 
-    data = load_points(args.data)
+    key = jrandom.PRNGKey(1234)
+    key, data_key, model_key, train_key = jrandom.split(key, 4)
 
+    data_train, data_test = load_points(data_key, args.data)
+    
     modules = {
         "igr": IGRModel(input_dim=3, depth=7, hidden=512),
         "hash": build_hash_mlp(emb_kwargs={}, hidden=64, act=jax.nn.softplus),
@@ -147,7 +156,7 @@ if __name__=='__main__':
     }
     module = modules[args.model]
 
-    model = module.init(key=jrandom.PRNGKey(0), inputs=data["position"][0])
+    model = module.init(key=model_key, inputs=data_train["position"][0])
 
     def save_callback(step, loss, model, optimizer):
         logging.info(f"[{step}] loss: {loss:.8f}")
@@ -161,11 +170,12 @@ if __name__=='__main__':
 
     loss, model = fit(
         model,
-        xs=data["position"],
-        ys=data["distance"],
-        normals=data["gradient"],
+        xs=data_train["position"],
+        ys=data_train["distance"],
+        normals=data_train["gradient"],
         steps=args.steps,
         batch_size=args.batch_size,
         cb_every=args.cb_every,
         cb=save_callback,
+        key=train_key,
     )
