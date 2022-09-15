@@ -34,17 +34,25 @@ def plot2d(sdf, *, ngrid=10, x_lims=(0, 1), y_lims=None, scatter_pts=None, figsi
     plt.close()
     return fig
 
-def plot3d(sdf, *, ngrid=10, x_lims=(0, 1), y_lims=None, z_lims=None):
-    if y_lims is None:
-        y_lims = x_lims
-    if z_lims is None:
-        z_lims = x_lims
+def extract_mesh3d(sdf, ngrid, x_lims, y_lims, z_lims):
     xs, ys = discretize3d(sdf, ngrid, x_lims, y_lims, z_lims)
+    if ys.max() < 0 or ys.min() > 0:
+        verts = np.zeros((0,3))
+        faces = np.zeros((0,3))
+        return verts, faces
     verts, faces, normals, values = measure.marching_cubes(np.array(ys), 0)
     verts /= ngrid
     verts[:,0] = verts[:,0] * abs(x_lims[0] - x_lims[1]) + x_lims[0]
     verts[:,1] = verts[:,1] * abs(y_lims[0] - y_lims[1]) + y_lims[0]
     verts[:,2] = verts[:,2] * abs(z_lims[0] - z_lims[1]) + z_lims[0]
+    return verts, faces
+
+def plot3d(sdf, *, ngrid=10, x_lims=(0, 1), y_lims=None, z_lims=None):
+    if y_lims is None:
+        y_lims = x_lims
+    if z_lims is None:
+        z_lims = x_lims
+    verts, faces = extract_mesh3d(sdf, ngrid, x_lims, y_lims, z_lims)
     return trimesh.Trimesh(vertices=verts, faces=faces, process=False).show()
 
 def dataloader(xs, ys, batch_size, *, key):
