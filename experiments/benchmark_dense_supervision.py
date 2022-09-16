@@ -84,7 +84,7 @@ def load_model(modelpath):
     model = pickle.loads(model_bytes)
     return model
 
-def print_callback(step, loss, model, optimizer):
+def print_callback(step, loss, model, optimizer, finalize):
     logging.info(f"[{step}] loss: {loss:.8f}")
 
 def fit(
@@ -107,8 +107,8 @@ def fit(
     for step, (xs_batch, ys_batch, normals_batch) in zip(range(steps), dataloader(xs, ys, normals, batch_size, key=data_key)):
         loss, model, optimizer = train_step(model, xs_batch, ys_batch, normals_batch, optimizer)
         if step % cb_every == 0:
-            cb(step, loss, model, optimizer)
-        cb(step, loss, model, optimizer)
+            cb(step, loss, model, optimizer, finalize=False)
+    cb(step, loss, model, optimizer, finalize=True)
     return loss, model
 
 if __name__=='__main__':
@@ -158,9 +158,9 @@ if __name__=='__main__':
 
     model = module.init(key=model_key, inputs=data_train["position"][0])
 
-    def save_callback(step, loss, model, optimizer):
+    def save_callback(step, loss, model, optimizer, finalize):
         logging.info(f"[{step}] loss: {loss:.8f}")
-        if step % args.save_every == 0:
+        if step % args.save_every == 0 or finalize:
             modelpath = logdir / f"model{step}.ckpt"
             save_model(modelpath, model)
             vertices, faces = extract_mesh3d(
