@@ -94,7 +94,7 @@ def fit(
     normals,
     # optimizer
     key=jrandom.PRNGKey(1234),
-    lr=5e-3,
+    lr=5e-4,
     steps=100,
     batch_size=128,
     # utils
