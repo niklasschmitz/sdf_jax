@@ -1,9 +1,9 @@
 import argparse
-import logging
+import wandb
 from pathlib import Path
+from tqdm import tqdm
 import pickle
 import cloudpickle
-
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
@@ -29,7 +29,7 @@ def load_points(key, path):
         + data["gradient"].sum(axis=1)
     ))
     data["position"] = data["position"][valid_indices]
-    data["distance"] = data["distance"][valid_indices]
+    data["distance"] = data["distance"][valid_indices].squeeze()
     data["gradient"] = data["gradient"][valid_indices]
     indices = jnp.arange(len(data["position"]))
     shuffled_indices = jrandom.permutation(key, indices)
@@ -73,6 +73,14 @@ def train_step(model, x, y, normals, optimizer):
     model = model.merge(new_params)
     return loss, model, optimizer
 
+@jax.jit
+def test_step(model, x, y, normals):
+    preds, grads = jax.lax.map(jax.value_and_grad(model), x)
+    preds_mape = jnp.mean(jnp.abs(preds - y) / (jnp.abs(y) + 0.01))
+    preds_rmse = jnp.sqrt(jnp.mean((preds - y)**2))
+    normal_rmse = jnp.sqrt(jnp.mean((grads - normals)**2))
+    return preds_mape, preds_rmse, normal_rmse
+
 #
 
 def save_model(modelpath, model):
@@ -85,7 +93,7 @@ def load_model(modelpath):
     return model
 
 def print_callback(step, loss, model, optimizer, finalize):
-    logging.info(f"[{step}] loss: {loss:.8f}")
+    print(f"[{step}] loss: {loss:.8f}")
 
 def fit(
     model,
@@ -104,7 +112,7 @@ def fit(
     optimizer = tx.Optimizer(optax.adam(lr))
     optimizer = optimizer.init(model.filter(tx.Parameter))
     key, data_key = jrandom.split(key, 2)
-    for step, (xs_batch, ys_batch, normals_batch) in zip(range(steps), dataloader(xs, ys, normals, batch_size, key=data_key)):
+    for step, (xs_batch, ys_batch, normals_batch) in zip(tqdm(range(steps)), dataloader(xs, ys, normals, batch_size, key=data_key)):
         loss, model, optimizer = train_step(model, xs_batch, ys_batch, normals_batch, optimizer)
         if step % cb_every == 0:
             cb(step, loss, model, optimizer, finalize=False)
@@ -121,29 +129,17 @@ if __name__=='__main__':
     parser.add_argument('--cb_every', type=int, default=50)
     parser.add_argument('--save_every', type=int, default=2000)
     parser.add_argument('--savegrid', type=int, default=256)
-    parser.add_argument('--loglevel', type=int, default=logging.INFO)
-    parser.add_argument('--logdir', type=str, default='')
     args = parser.parse_args()
 
-    logdir = args.logdir or f"{Path(args.data).stem}_{args.model}_steps{args.steps}"
-    logdir = Path(logdir)
-    logdir.mkdir(parents=True, exist_ok=True)
-    logfile = Path(logdir) / "logs.log"
-    logging.basicConfig(
-        level=args.loglevel,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(logfile),
-            logging.StreamHandler(),
-        ],
-        force=True,
-    )
-    logging.info(args)
+    wandb.init(project="SDF-dense-supervision")
+    wandb.config.update(args)
+    logdir = Path(wandb.run.dir)
 
     key = jrandom.PRNGKey(1234)
     key, data_key, model_key, train_key = jrandom.split(key, 4)
 
     data_train, data_test = load_points(data_key, args.data)
+    data_test = jax.tree_map(lambda y: y[:args.batch_size], data_test)
     
     modules = {
         "igr": IGRModel(input_dim=3, depth=7, hidden=512),
@@ -159,7 +155,6 @@ if __name__=='__main__':
     model = module.init(key=model_key, inputs=data_train["position"][0])
 
     def save_callback(step, loss, model, optimizer, finalize):
-        logging.info(f"[{step}] loss: {loss:.8f}")
         if step % args.save_every == 0 or finalize:
             modelpath = logdir / f"model{step}.ckpt"
             save_model(modelpath, model)
@@ -167,6 +162,18 @@ if __name__=='__main__':
                 model, ngrid=args.savegrid, x_lims=(0,1), y_lims=(0,1), z_lims=(0,1),
             )
             jnp.savez(logdir / f"mesh{step}.npz", vertices=vertices, faces=faces)
+            preds_mape, preds_rmse, normal_rmse = test_step(
+                model, data_test["position"], data_test["distance"], data_test["gradient"],
+            )
+            wandb.log({
+                "loss": loss, 
+                "test_y_mape": preds_mape,
+                "test_y_rmse": preds_rmse,
+                "test_normal_rmse": normal_rmse,
+                "vertices": wandb.Object3D(vertices),
+            })
+        else:
+            wandb.log({"loss": loss})
 
     loss, model = fit(
         model,
