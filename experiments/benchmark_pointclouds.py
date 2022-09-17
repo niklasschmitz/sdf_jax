@@ -6,14 +6,16 @@ from tqdm import tqdm
 import functools as ft
 import optax
 import treex as tx
-from sdf_jax.util import dataloader
-from models import IGRModel
 from pathlib import Path
+import argparse
 import pickle
 import cloudpickle
+from models import IGRModel, build_hash_mlp, IDFModel
+from sdf_jax.util import dataloader
+from sdf_jax.util import extract_mesh3d
 
 
-def load_points(path):
+def load_points(key, path):
     """Loads a dataset from https://github.com/tovacinni/sdf-explorer"""
     data_npz = jnp.load(path)
     data = {}
@@ -22,14 +24,21 @@ def load_points(path):
     data["distance"] = jnp.array(data_npz["distance"]) / 2.0
     data["gradient"] = jnp.array(data_npz["gradient"]) / 2.0
     valid_indices = jnp.logical_not(jnp.isnan(
-        data["position"].sum(axis=1) 
-        + data["distance"].reshape(-1) 
+        data["position"].sum(axis=1)
+        + data["distance"].reshape(-1)
         + data["gradient"].sum(axis=1)
     ))
     data["position"] = data["position"][valid_indices]
     data["distance"] = data["distance"][valid_indices].squeeze()
     data["gradient"] = data["gradient"][valid_indices]
-    return data
+    indices = jnp.arange(len(data["position"]))
+    shuffled_indices = jrandom.permutation(key, indices)
+    n_train = len(shuffled_indices) // 10
+    train_indices, test_indices = shuffled_indices[:n_train], shuffled_indices[n_train:]
+    data_train = jax.tree_map(lambda x: x[train_indices], data)
+    data_test = jax.tree_map(lambda x: x[test_indices], data)
+    return data_train, data_test
+
 
 # IGR loss
 
@@ -69,6 +78,17 @@ def train_step(model, xs, normals, lam, tau, optimizer, key):
     model = model.merge(new_params)
     return loss, model, optimizer
 
+@jax.jit
+def test_step(model, xs, normals):
+    surface_loss = jnp.mean(jax.vmap(ft.partial(surface_loss_fn, model))(xs))
+    if normals is not None:
+        normal_loss = jnp.mean(jax.vmap(ft.partial(normal_loss_fn, model))(xs, normals))
+    else:
+        normal_loss = 0.0
+    xs_eik = sample_normal_per_point(key, xs)
+    eikonal_loss = jnp.mean(jax.vmap(ft.partial(eikonal_loss_fn, model))(xs_eik))
+    return surface_loss, normal_loss, eikonal_loss
+
 # 
 
 def save_model(modelpath, model):
@@ -80,11 +100,11 @@ def load_model(modelpath):
     model = pickle.loads(model_bytes)
     return model
 
-def print_callback(step, loss, model, optimizer):
+def print_callback(step, loss, model, optimizer, finalize):
     tqdm.write(f"[{step}] loss: {loss:.8f}")
 
 def fit(
-    module,
+    model,
     xs,
     normals=None,
     lam=0.1,
@@ -98,8 +118,6 @@ def fit(
     cb=print_callback,
     cb_every=10,
 ):
-    key, model_key = jrandom.split(key, 2)
-    model = module.init(key=model_key, inputs=xs[0])
     optimizer = tx.Optimizer(optax.adam(lr))
     optimizer = optimizer.init(model.filter(tx.Parameter))
     key, data_key = jrandom.split(key, 2)
@@ -107,34 +125,70 @@ def fit(
         key, step_key = jrandom.split(key, 2)
         loss, model, optimizer = train_step(model, xs_batch, normals_batch, lam, tau, optimizer, step_key)
         if step % cb_every == 0:
-            cb(step, loss, model, optimizer)
-    cb(step, loss, model, optimizer)
+            cb(step, loss, model, optimizer, finalize=False)
+    cb(step, loss, model, optimizer, finalize=True)
     return loss, model
 
 if __name__=='__main__':
 
-    data = load_points("../../samples/surface/Dalek.npz")
+    parser = argparse.ArgumentParser(description='GDML-JAX MD17 Example')
+    parser.add_argument('--data', type=str, default="Dalek.npz")
+    parser.add_argument('--model', type=str, default="igr")
+    parser.add_argument('--steps', type=int, default=10_000)
+    parser.add_argument('--batch_size', type=int, default=128**2)
+    parser.add_argument('--cb_every', type=int, default=50)
+    parser.add_argument('--save_every', type=int, default=2000)
+    parser.add_argument('--save_path', type=str, default="checkpoints")
+    parser.add_argument('--savegrid', type=int, default=256)
+    args = parser.parse_args()
 
-    module = IGRModel(input_dim=3, depth=7, hidden=512)
+    key = jrandom.PRNGKey(1234)
+    key, data_key, model_key, train_key = jrandom.split(key, 4)
 
-    model = module.init(key=jrandom.PRNGKey(0), inputs=data["position"][0])
+    data_train, data_test = load_points(data_key, args.data)
+    data_test = jax.tree_map(lambda y: y[:args.batch_size], data_test)
 
-    save_every = 2000
-    save_path = Path("checkpoints")
+    modules = {
+        "igr": IGRModel(input_dim=3, depth=7, hidden=512),
+        "hash": build_hash_mlp(emb_kwargs={}, hidden=64, act=jax.nn.softplus),
+        "idf": IDFModel(
+            IGRModel(input_dim=3, depth=7, hidden=512),
+            build_hash_mlp(emb_kwargs={}, hidden=64, act=jax.nn.softplus),
+            nu=0.04,
+        ),
+    }
+    module = modules[args.model]
+
+    model = module.init(key=model_key, inputs=data_train["position"][0])
+
+    save_path = Path(args.save_path)
     save_path.mkdir(parents=True, exist_ok=True)
 
-    def save_callback(step, loss, model, optimizer):
-        print_callback(step, loss, model, optimizer)
-        if step % save_every == 0:
-            modelpath = save_path / f"model{step}.cpkt"
-            save_model(modelpath, model)
+    def save_callback(step, loss, model, optimizer, finalize):
+        print_callback(step, loss, model, optimizer, finalize)
+        if step % args.save_every == 0 or finalize:
+            vertices, faces = extract_mesh3d(
+                model, ngrid=args.savegrid, x_lims=(0,1), y_lims=(0,1), z_lims=(0,1),
+            )
+            surface_loss, normal_loss, eikonal_loss = test_step(
+                model, data_test["position"], data_test["gradient"],
+            )
+            meta = {
+                "loss": loss.item(), 
+                "test_surface_loss": surface_loss.item(),
+                "test_normal_loss": normal_loss.item(),
+                "test_eikonal_loss": eikonal_loss.item(),
+            }
+            jnp.savez(save_path / f"mesh{step}.npz", vertices=vertices, faces=faces, meta=meta)
+            tqdm.write(str(meta))
 
     loss, model = fit(
-        module,
-        xs=data["position"],
-        normals=data["gradient"],
-        steps=10_000,       # 100_000
-        batch_size=128**2, # 128**2
-        cb_every=50,
+        model,
+        xs=data_train["position"],
+        normals=data_train["gradient"],
+        steps=args.steps,
+        batch_size=args.batch_size,
+        cb_every=args.cb_every,
         cb=save_callback,
+        key=train_key,
     )
