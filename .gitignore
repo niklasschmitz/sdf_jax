@@ -1,6 +1,7 @@
 *.obj
 *.npz
 *.ckpt
+experiments/wandb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

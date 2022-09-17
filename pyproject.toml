@@ -16,6 +16,7 @@ tqdm = "^4.64.0"
 scikit-image = "^0.19.2"
 trimesh = "^3.12.6"
 cloudpickle = "^2.2.0"
+wandb = "^0.13.3"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.1.2"
