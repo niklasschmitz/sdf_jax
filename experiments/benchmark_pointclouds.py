@@ -27,7 +27,7 @@ def load_points(path):
         + data["gradient"].sum(axis=1)
     ))
     data["position"] = data["position"][valid_indices]
-    data["distance"] = data["distance"][valid_indices]
+    data["distance"] = data["distance"][valid_indices].squeeze()
     data["gradient"] = data["gradient"][valid_indices]
     return data
 
