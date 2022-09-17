@@ -111,7 +111,7 @@ def fit(
     tau=1.0,
     # optimizer
     key=jrandom.PRNGKey(1234),
-    lr=5e-3,
+    lr=0.0001,
     steps=100,
     batch_size=128,
     # utils
@@ -138,7 +138,7 @@ if __name__=='__main__':
     parser.add_argument('--batch_size', type=int, default=128**2)
     parser.add_argument('--cb_every', type=int, default=50)
     parser.add_argument('--save_every', type=int, default=2000)
-    parser.add_argument('--save_path', type=str, default="checkpoints")
+    parser.add_argument('--save_path', type=str, default="")
     parser.add_argument('--savegrid', type=int, default=256)
     args = parser.parse_args()
 
@@ -161,7 +161,8 @@ if __name__=='__main__':
 
     model = module.init(key=model_key, inputs=data_train["position"][0])
 
-    save_path = Path(args.save_path)
+    save_path = args.save_path or "logs/{Path(args.data).stem}_{args.model}_steps{args.steps}"
+    save_path = Path(save_path)
     save_path.mkdir(parents=True, exist_ok=True)
 
     def save_callback(step, loss, model, optimizer, finalize):
