@@ -161,7 +161,7 @@ if __name__=='__main__':
 
     model = module.init(key=model_key, inputs=data_train["position"][0])
 
-    save_path = args.save_path or "logs/{Path(args.data).stem}_{args.model}_steps{args.steps}"
+    save_path = args.save_path or f"logs/{Path(args.data).stem}_{args.model}_steps{args.steps}"
     save_path = Path(save_path)
     save_path.mkdir(parents=True, exist_ok=True)
 
