@@ -143,10 +143,10 @@ if __name__=='__main__':
     
     modules = {
         "igr": IGRModel(input_dim=3, depth=7, hidden=512),
-        "hash": build_hash_mlp(emb_kwargs={}, hidden=64, act=jax.nn.softplus),
+        "hash": build_hash_mlp(emb_kwargs={}, hidden=64, act=jax.nn.relu),
         "idf": IDFModel(
             IGRModel(input_dim=3, depth=7, hidden=512),
-            build_hash_mlp(emb_kwargs={}, hidden=64, act=jax.nn.softplus),
+            build_hash_mlp(emb_kwargs={}, hidden=64, act=jax.nn.relu),
             nu=0.04,
         ),
     }
