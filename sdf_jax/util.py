@@ -47,6 +47,11 @@ def extract_mesh3d(sdf, ngrid, x_lims, y_lims, z_lims):
     verts[:,2] = verts[:,2] * abs(z_lims[0] - z_lims[1]) + z_lims[0]
     return verts, faces
 
+def extract_largest_submesh(mesh):
+    submeshes = trimesh.graph.split(mesh)
+    largest = submeshes[np.argmax([len(s.vertices) for s in submeshes])]
+    return largest
+
 def plot3d(sdf, *, ngrid=10, x_lims=(0, 1), y_lims=None, z_lims=None):
     if y_lims is None:
         y_lims = x_lims
