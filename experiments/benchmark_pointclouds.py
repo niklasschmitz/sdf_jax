@@ -112,6 +112,7 @@ def fit(
     # optimizer
     key=jrandom.PRNGKey(1234),
     lr=0.0001,
+    step_start=0,
     steps=100,
     batch_size=128,
     # utils
@@ -121,7 +122,8 @@ def fit(
     optimizer = tx.Optimizer(optax.adam(lr))
     optimizer = optimizer.init(model.filter(tx.Parameter))
     key, data_key = jrandom.split(key, 2)
-    for step, (xs_batch, normals_batch) in zip(tqdm(range(steps)), dataloader(xs, normals, batch_size, key=data_key)):
+    for step, (xs_batch, normals_batch) in zip(tqdm(range(step_start, step_start + steps)), 
+                                               dataloader(xs, normals, batch_size, key=data_key)):
         key, step_key = jrandom.split(key, 2)
         loss, model, optimizer = train_step(model, xs_batch, normals_batch, lam, tau, optimizer, step_key)
         if step % cb_every == 0:
@@ -156,6 +158,7 @@ if __name__=='__main__':
             build_hash_mlp(emb_kwargs={}, hidden=64, act=jax.nn.relu),
             nu=0.04,
         ),
+        "idf-pretrain": IGRModel(input_dim=3, depth=7, hidden=512),
     }
     module = modules[args.model]
 
@@ -183,13 +186,39 @@ if __name__=='__main__':
             jnp.savez(save_path / f"mesh{step}.npz", vertices=vertices, faces=faces, meta=meta)
             tqdm.write(str(meta))
 
+    steps = args.steps
+    if args.model == "idf-pretrain":
+        steps = args.steps // 2
+
     loss, model = fit(
         model,
         xs=data_train["position"],
         normals=data_train["gradient"],
-        steps=args.steps,
+        steps=steps,
         batch_size=args.batch_size,
         cb_every=args.cb_every,
         cb=save_callback,
         key=train_key,
     )
+
+    if args.model == "idf-pretrain":
+        tqdm.write("Starting refinement.")
+
+        idf_model = IDFModel(
+            model.freeze(),
+            build_hash_mlp(emb_kwargs={}, hidden=64, act=jax.nn.relu),
+            nu=0.04,
+        )
+        idf_model = idf_model.init(key=model_key, inputs=data_train["position"][0])
+
+        loss, idf_model = fit(
+            idf_model,
+            xs=data_train["position"],
+            normals=data_train["gradient"],
+            step_start=steps,
+            steps=steps,
+            batch_size=args.batch_size,
+            cb_every=args.cb_every,
+            cb=save_callback,
+            key=train_key,
+        )
