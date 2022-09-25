@@ -136,6 +136,7 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser(description='GDML-JAX MD17 Example')
     parser.add_argument('--data', type=str, default="Dalek.npz")
     parser.add_argument('--model', type=str, default="igr")
+    parser.add_argument('--attenuation', type=jnp.float32, default=jnp.float32(0.04)) # for idf
     parser.add_argument('--steps', type=int, default=10_000)
     parser.add_argument('--batch_size', type=int, default=128**2)
     parser.add_argument('--cb_every', type=int, default=50)
@@ -156,7 +157,7 @@ if __name__=='__main__':
         "idf": IDFModel(
             IGRModel(input_dim=3, depth=7, hidden=512),
             build_hash_mlp(emb_kwargs={}, hidden=64, act=jax.nn.relu),
-            nu=0.04,
+            nu=args.attenuation,
         ),
         "idf-pretrain": IGRModel(input_dim=3, depth=7, hidden=512),
     }
@@ -207,7 +208,7 @@ if __name__=='__main__':
         idf_model = IDFModel(
             model.freeze(),
             build_hash_mlp(emb_kwargs={}, hidden=64, act=jax.nn.relu),
-            nu=0.04,
+            nu=args.attenuation,
         )
         idf_model = idf_model.init(key=model_key, inputs=data_train["position"][0])
 
