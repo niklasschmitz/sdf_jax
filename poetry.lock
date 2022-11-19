@@ -566,6 +566,20 @@ numpy = ">=1.19"
 scipy = "*"
 
 [[package]]
+name = "jaxtyping"
+version = "0.2.8"
+description = "Type annotations and runtime checking for shape and dtype of JAX arrays, and PyTrees."
+category = "main"
+optional = false
+python-versions = "~=3.7"
+
+[package.dependencies]
+jax = ">=0.3.4"
+numpy = ">=1.20.0"
+typeguard = ">=2.13.3"
+typing-extensions = ">=3.7.4.1"
+
+[[package]]
 name = "jedi"
 version = "0.18.1"
 description = "An autocompletion tool for Python that can be used for text editors."
@@ -1502,6 +1516,18 @@ easy = ["shapely", "pyglet", "sympy", "jsonschema", "networkx", "svg.path", "sci
 test = ["pyinstrument", "coveralls", "pytest-cov", "pytest", "ezdxf"]
 
 [[package]]
+name = "typeguard"
+version = "2.13.3"
+description = "Run-time type checker for Python"
+category = "main"
+optional = false
+python-versions = ">=3.5.3"
+
+[package.extras]
+doc = ["sphinx-rtd-theme", "sphinx-autodoc-typehints (>=1.2.0)"]
+test = ["pytest", "typing-extensions", "mypy"]
+
+[[package]]
 name = "typing-extensions"
 version = "4.2.0"
 description = "Backported and Experimental Type Hints for Python 3.7+"
@@ -1598,7 +1624,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8, <3.11"
-content-hash = "2bde629b7cd7094dea788b1ce68ac9410651d38fe14148a98547ecceaca5a5d2"
+content-hash = "a2486b5a4736e1e582478e8c3178b36a0c4b07013e113d7ea7fd521bc646a0f9"
 
 [metadata.files]
 absl-py = [
@@ -1867,6 +1893,7 @@ jaxlib = [
     {file = "jaxlib-0.3.10-cp39-none-macosx_11_0_arm64.whl", hash = "sha256:cd30a9af14fdbf675e6672bb1af77be0ce3040b86fed573c5656b8fb4150d550"},
     {file = "jaxlib-0.3.10-cp39-none-manylinux2014_x86_64.whl", hash = "sha256:e67d2f82f543050b682d85bf33a271a6ad365b7f96d98cc86347a2fd636b55ae"},
 ]
+jaxtyping = []
 jedi = [
     {file = "jedi-0.18.1-py2.py3-none-any.whl", hash = "sha256:637c9635fcf47945ceb91cd7f320234a7be540ded6f3e99a50cb6febdfd1ba8d"},
     {file = "jedi-0.18.1.tar.gz", hash = "sha256:74137626a64a99c8eb6ae5832d99b3bdd7d29a3850fe2aa80a4126b2a7d949ab"},
@@ -2598,6 +2625,7 @@ trimesh = [
     {file = "trimesh-3.12.6-py3-none-any.whl", hash = "sha256:1e2d0bd79f01e6bccacb7fa7952c277ec527f0ba92ab09425434d5d494b41cb4"},
     {file = "trimesh-3.12.6.tar.gz", hash = "sha256:a7b604d6a5618e2cd536e24b5d9174970dbc59bcef9cec1f82ebccaf46fc89f7"},
 ]
+typeguard = []
 typing-extensions = [
     {file = "typing_extensions-4.2.0-py3-none-any.whl", hash = "sha256:6657594ee297170d19f67d55c05852a874e7eb634f4f753dbd667855e07c1708"},
     {file = "typing_extensions-4.2.0.tar.gz", hash = "sha256:f1c24655a0da0d1b67f07e17a5e6b2a105894e6824b92096378bb3668ef02376"},

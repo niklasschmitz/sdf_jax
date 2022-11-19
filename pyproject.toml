@@ -18,6 +18,7 @@ trimesh = "^3.12.6"
 cloudpickle = "^2.2.0"
 wandb = "^0.13.3"
 pyglet = "^1.5.26"
+jaxtyping = "^0.2.8"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.1.2"
