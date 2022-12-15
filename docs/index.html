@@ -1,0 +1,408 @@
+<!doctype html><html class="no-js"><head><meta charset="utf-8"><title>Neural SDF for point clouds</title><meta name="description" content=""><meta name="viewport" content="width=device-width">
+<!-- Place favicon.ico and apple-touch-icon.png in the root directory -->
+<link href="http://fonts.googleapis.com/css?family=Raleway:300,400,600" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" type="text/css" href="style.css">
+        <script type="text/javascript" async
+  src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML"></script>
+        <!--<link rel="stylesheet" href="styles/main.37ab405b.css">-->
+<body>
+<!--[if lt IE 7]>
+<p class="browsehappy">You are using an 
+    <strong>outdated</strong> browser. Please 
+    <a href="http://browsehappy.com/">upgrade your browser</a> to improve your experience.
+</p>
+<![endif]-->
+<div class="container">
+
+    <nav class="navbar">
+        <div class="container">
+            <ul class="navbar-list">
+                <li class="navbar-item">
+                    <a class="navbar-link" href="#intro">Intro</a>
+                </li>
+                <li class="navbar-item">
+                    <a class="navbar-link" href="#methods">Methods</a>
+                </li>
+                <li class="navbar-item">
+                    <a class="navbar-link" href="#implementation">Implementation</a>
+                </li>
+                <li class="navbar-item">
+                    <a class="navbar-link" href="#experiments">Experiments</a>
+                </li>
+                <li class="navbar-item">
+                    <a class="navbar-link" href="#conclusion">Conclusion</a>
+                </li>
+                <li class="navbar-item">
+                    <a class="navbar-link" href="#references">References</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <section class="header" id="intro">
+        <h2 class="title">Neural Signed Distance Functions From Point Clouds</h2>
+        <h6>Project by Niklas Schmitz (<a href="mailto:schmitz@tu-berlin.de">schmitz@tu-berlin.de</a>)
+        </h6>
+
+        <div class="row">
+            <img class="u-max-full-width" src="images/dalek_igr.png">
+            <p>
+            Signed distance functions (SDFs) are implicit representations of geometry, with nice mathematical and algorithmic properties
+            such as efficient intersection testing. This often makes them a useful alternative to explicit mesh-based geometry representations,
+            with applications ranging from graphics to computer-aided design and beyond. 
+            Neural signed distance functions (NSDFs) employ methods from neural networks and gradient-based optimization
+            to fit flexible signed distance function representations to raw data such as point clouds.
+            </p>
+
+            <p>
+            In this project, we explore novel combinations of two recent works on NSDFs: The first being "Implicit Geometric Regularization for Learning Shapes" by Gropp et al. <a href="#1">[1]</a>,
+            and the second "Instant Neural Graphics Primitives with a Multiresolution Hash Encoding" by Müller et al. <a href="#2">[2]</a>.
+            The goal is to benefit from multiresolution representations when 
+            fitting NSDFs to raw but highly detailed point clouds. The combination
+            of the two is achieved by adapting the general approach from
+             "Geometry-Consistent Neural Shape Representation with Implicit Displacement Fields" by Yifan et al. <a href="#3">[3]</a>.
+            </p>
+        </div>
+    </section>
+
+    <div class="docs-section" id="task">
+        <h3 class="section-heading">Task</h3>
+        <p class="section-description">
+            The signed distance function \(f: \mathbb{R}^3 \to \mathbb{R}\) of a closed
+            volume \(\mathcal{M}\subset\mathbb{R}^3\) is defined as
+            \[
+                f(x) =
+                \begin{cases}
+                    -\textrm{dist}(x, \partial \mathcal M),\quad x\in \mathcal M\\
+                    +\textrm{dist}(x, \partial \mathcal M),\quad x\notin \mathcal M
+                \end{cases}.
+            \]
+            The boundary surface is thus represented implicitly and can be recovered from \(f\) as its zero-level set as
+            \[
+                \partial \mathcal{M} = \{x \in \mathbb{R}^3 \,|\, f(x)=0\}.
+            \]
+
+            <div class="row" style="text-align: center;">
+                <h5 class="docs-header">Example Signed Distance Function</h5>
+                <img src="images/sdfcircle.png" width="50%">
+                    <p>The SDF of a sphere is \(f(x)=||x||-1\), which in 2D gives the circle.</p>
+            </div>
+            
+            Following Gropp et al.<a href="#1">[1]</a>, we consider the task of reconstructing an approximate signed distance function
+            from raw data: Given an input point cloud \(\mathcal{X} = \{x_i\}_{i\in I}\subset \mathbb{R}^3\)
+            and associated normals \(\mathcal{N}=\{n_i\}_{i\in I}\),
+            the goal is to fit parameters \(\theta\) of a neural network Ansatz \(f(x) \approx f(x; \theta)\)
+            to recover a plausible surface consistent with the data.
+        </p>
+        <div class="row" style="text-align: center;">
+            <h5 class="docs-header">Input Point Cloud</h5>
+            <img src="images/spot_pointcloud.png" width="50%">
+                <p>An example point cloud <a href="https://www.cs.cmu.edu/~kmcrane/Projects/ModelRepository/#spot">(from Keenan Crane)</a>.</p>
+        </div>
+    </div>
+
+    <div class="docs-section" id="methods">
+        <h3 class="section-heading">Methods</h3>
+
+        <h5>Implicit Geometric Regularization</h5>
+
+
+        <p>For the surface reconstruction task, Gropp et al.<a href="#1">[1]</a> introduced
+        a loss of the form
+        \[
+        \mathcal{L}(\theta) = 
+        \frac{1}{|I|}\sum_{i \in I} 
+        (|f(x_i; \theta)| + \tau ||\nabla_x f(x_i; \theta) - n_i||)
+        +
+        \lambda \mathbb{E}_x(||\nabla_x f(x; \theta)|| - 1)^2,
+        \]
+        where \(\tau\) and \(\lambda\) are hyperparameters with defaults 1.0 and 0.1,
+        respectively.
+        The first two terms encourage the function to vanish on the given surface points
+        and align its gradient to reproduce the given normals.
+
+        The last term is called the <i>Eikonal term</i>, encouraging unit-norm gradients throughout ambient space. 
+        It is named in analogy to the Eikonal partial differential equation
+        \[
+        ||\nabla f(x)|| = 1.
+        \]
+        The expectation is taken with respect to a probability density \(x\sim \mathcal{D}\) detailed in <a href="#1">[1]</a>,
+        sampling partly close around each surface point and partly from the ambient 
+        unit cube.</p>
+
+        <h5>Multiresolution Hash Encoding</h5>
+
+        <p>Instead of directly feeding inputs \(x\in\mathbb{R}^3\) into a
+        fully connected neural network, Müller et al.<a href="#2">[2]</a> proposed
+        a learnable hashing-based multiresolution input encoding \(y = \textrm{enc}(x; \theta_{\textrm{enc}})\)
+        to efficiently adapt to fine detailed geometry at multiple scales.</p>
+
+        <div class="row" style="text-align: center;">
+            <h5 class="docs-header">Multiresolution Hash Encoding Architecture</h5>
+            <img class="u-max-full-width" src="images/muller2022hashencoding.png">
+                <p>Illustration of the multiresolution hash encoding in 2D. Figure 3 from Müller et al.<a href="#2">[2]</a></p>
+        </div>
+
+        <h5>Implicit Displacement Fields</h5>
+
+        <p>Taking inspiration from classical displacement mapping techniques from graphics,
+        Yifan et al.<a href="#3">[3]</a> proposed a particular composition scheme of 
+        network architectures from a low-frequent base network \(N_B(x)\) and a high-frequent 
+        displacement network \(N_D(x)\). The signed distance is then computed in two steps:
+        \[
+        f(x) = N_B(x), \quad \hat{f}(x) = N_B\bigg(x + \chi\big(f(x)\big) N_D(x) \frac{\nabla f(x)}{||\nabla f(x)||} \bigg)
+        \]
+        This form allows for small local displacements of the query points along the
+        normal direction, adding detail to a possibly pretrained coarse base network.
+        The attenuation function \(\chi(f(x))=\frac{1}{1 + (f(x) / \nu)^4}\) suppresses
+        the contribution of \(N_D\) when far from the surface, with the hyperparameter
+        \(\nu\) controlling the speed of attenuation. This is to reduce 
+        room for high-frequent artefacts in data-sparse regions.
+        </p>
+        
+        <div class="row" style="text-align: center;">
+            <h5 class="docs-header">Implicit Displacement Field</h5>
+            <img src="images/idf.webp" width="50%">
+                <p>Illustration of an implicit displacement field in 1D. Figure 3 from Yifan et al.<a href="#3">[3]</a></p>
+        </div>
+
+    </div>
+
+    <div class="docs-section" id="implementation">
+        <h3 class="section-heading">Implementation</h3>
+        <p>
+            We use JAX with Treex, skimage marching cubes, trimesh. We follow
+            the convention of rescaling input data to work in the unit cube [0,1]^3. 
+        </p>
+        <div class="row" style="text-align: center;">
+            <h5 class="docs-header">Full Code Available</h5>
+            <a href="https://github.com/niklasschmitz/sdf_jax">https://github.com/niklasschmitz/sdf_jax</a>
+        </div>
+    </div>
+
+    <div class="docs-section" id="experiments">
+        <h3 class="section-heading">Experiments</h3>
+        <h5>2D shape reconstruction with IGR</h5>
+        <p>
+            We start with a simple toy example of a small synthetic point cloud in 2D.
+            We use the IGR loss function, but omitting normals.
+            As a model we use the <code>IGRModel</code>, which reimplements the 7-layer MLP with
+            a skip-connection to the fourth layer described in and used
+            throughout by Gropp et al. in <a href="#1">[1]</a>. The Adam optimizer is used
+            with a step size of <code>5e-3</code> for \(1000\) steps, which here takes less than a second.
+
+            The full code for this first example is available as 
+            <a href="https://github.com/niklasschmitz/sdf_jax/blob/main/experiments/geometric_regularization.ipynb">geometric_regularization.ipynb</a>.
+        </p>
+        <p>
+            The resulting reconstruction is visualized below. Visually, we observe a plausible fit of the points by the zero levelset
+            as a closed curve forming a cross. Looking at the reconstructed SDF on the right, 
+            we observe the desired approximately even spacing of contour lines.
+            <div class="row" style="text-align: center;">
+                <img src="images/igr_cross_2d.png" width="50%">
+                    <p>Toy example of applying IGR to a small point cloud in 2D.</p>
+            </div>
+        </p>
+
+        <h5>3D shape reconstruction with IGR</h5>
+        <p>
+            Here we start with the simple 3D point cloud from the introduction, consisting of
+            \(\sim 4000\) vertices. Additionally, we include approximate vertex normals
+            computed from unweighted triangle normal averages. We again fit an <code>IGRModel</code> as described above,
+            now with \(300\) steps and a batch size of \(1024\). The result is shown in the second panel below, visually
+            indicating an adequate fit. Now we replace the model by a Hash Encoding. The encoding is followed by a simple 
+            MLP with two hidden layers of width \(64\) and softplus activations, and fit using the same procedure.
+            The result is shown in the third panel below.
+        </p>
+        <p>
+            The key visual observation of this experiment are the ambient artefacts of the Hash Encoding MLP off the surface, which are
+            most likely left-overs from the random initialization and are difficult to smoothen out during training
+            being far from the data and spatially de-correlated. This hints at the fact that we need a more refined approach,
+            if we want to benefit from multiresolution detail for our point cloud task.
+        </p>
+        <div class="row">
+            <div class="one-third column category" style="text-align: center;">
+                <h5 class="docs-header">Input</h5>
+                <img class="u-max-full-width" src="images/spot_pointcloud.png">
+                <p>The input point cloud in 3D.</p>
+                </div>
+
+                <div class="one-third column category" style="text-align: center;">
+                <h5 class="docs-header">IGRModel</h5>
+                <img class="u-max-full-width" src="images/spot_igr_normals.png">
+                <p>Reconstructed surface by the IGRModel.</p>
+                </div>
+
+                <div class="one-third column category" style="text-align: center;">
+                <h5 class="docs-header">Hash Encoding MLP</h5>
+                <img class="u-max-full-width" src="images/spot_igr_hash.png">
+                <p>Reconstructed surface by an MLP with Hash Encoding, showing
+                    characteristic artifacts in ambient space.</p>
+            </div>
+        </div>
+        
+        <h5>3D shape reconstruction with Implicit Displacement Fields, IGR and Hash Encoding</h5>
+        <!-- <p>
+            We now train longer and measure errors.
+            IGR looks robust, usually oversmoothing.
+            IDF has some advantage in details but more prone to producing artefacts.
+            post-processing helps a bit.
+            Pre-training IGR and freezing works better.
+        </p> -->
+
+        <p>
+            We now turn to more detailed examples from the 
+            <a href="https://github.com/tovacinni/sdf-explorer">sdf-explorer dataset</a> 
+            from Takikawa et al.<a href="#4">[4]</a>,
+            containing positions and normals of sampled surfaces, generated from
+            synthetic ground-truth signed distance functions.
+        </p>
+
+        <p>
+            Next to the default <code>IGRModel</code> configuration with width \(512\) under the name "igr",
+            we also try out two novel variants of combining the IGR model as base model
+            with the Hash Encoding MLP as displacement model together forming
+            and Implicit Displacement Field <code>IDFModel</code>
+            (using the default attenuation speed \(\nu=0.04\)).
+            The two IDF-based models differ in their training procedure:
+            "idf" jointly fits both the base and the displacement
+            networks; idf-pretrain" first fits
+            the base IGRModel alone for half of the optimization steps,
+            then freezes its weights and combines it in a IDFModel with a
+            new displacement model, training for the remaining half of the optimization duration.
+        </p>
+        <p>
+            We fit all three models using the default IGR loss on positions and normals,
+            using the Adam optimizer for \(20000\) steps with 
+            step size \(0.0001\) and
+            a batch size of \(128^2\). Validation losses
+            are evaluated on \(128^2\) points chosen uniformly at random and
+            excluded from the training set, and are tabulated below.
+        </p>
+        <div class="row" style="text-align: center;">
+                <h5 class="docs-header">Point Cloud Benchmark Results</h5>
+                <table class="u-full-width">
+                    <thead>
+                        <tr>
+                            <th>Dataset</th>
+                            <th>Model</th>
+                            <th>Surface loss</th>
+                            <th>Normal loss</th>
+                            <th>Eikonal loss</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Dalek</td>
+                            <td>"igr"</td>
+                            <td>0.00117</td>
+                            <td>0.06390</td>
+                            <td>0.09611</td>
+                        </tr>
+                        <tr>
+                            <td>Dalek</td>
+                            <td>"idf"</td>
+                            <td>0.00042</td>
+                            <td>0.08637</td>
+                            <td>0.02494</td>
+                        </tr>
+                        <tr>
+                            <td>Dalek</td>
+                            <td>"idf-pretrain"</td>
+                            <td>0.00070</td>
+                            <td>0.07742</td>
+                            <td>0.02395</td>
+                        </tr>
+                    </tbody>
+                </table>
+        </div>
+        <div class="row">
+            <div class="one-third column category" style="text-align: center;">
+                <h5 class="docs-header">"igr"</h5>
+                <img class="u-max-full-width" src="images/dalek_igr.png">
+                <p>Reconstruction using the "igr" config.</p>
+                </div>
+
+                <div class="one-third column category" style="text-align: center;">
+                <h5 class="docs-header">"idf"</h5>
+                <img class="u-max-full-width" src="images/dalek_idf.png">
+                <p>Reconstruction using the "idf" config.</p>
+                </div>
+
+                <div class="one-third column category" style="text-align: center;">
+                <h5 class="docs-header">"idf-pretrain"</h5>
+                <img class="u-max-full-width" src="images/dalek_idf-pretrain.png">
+                <p>Reconstruction using the "idf-pretrain" config.</p>
+            </div>
+        </div>
+        <p>
+            We observe an overall smooth fit of the "igr" configuration but lacking
+            a bit of detail on and above the arms. 
+            The "idf" approach with joint training, while having the lowest validation surface loss,
+            is plagued visibly by ambient artifacts. The "idf-pretrain"
+            approach looks much more stable, closer to "igr" while still exhibiting a few small
+            artefacts but also a bit more detail on and above the arms.
+        </p>
+        <p>
+            The full code for reproducing this benchmark experiment can be found in
+            <a href="https://github.com/niklasschmitz/sdf_jax/blob/main/experiments/benchmark_pointclouds.py">
+                benchmark_pointclouds.py
+            </a>.
+        </p>
+    </div>
+
+    <div class="docs-section" id="conclusion">
+        <h3 class="section-heading">Conclusion</h3>
+        <p class="section-description">
+            We have implemented three independent methods from the current research on neural implicit representation
+            with a focus on SDF and shape construction from 3D point cloud.
+        </p>
+        <p>
+            The IGR loss is showing promise as providing a general framework for the 3D reconstruction task, 
+            where we could seamlessly switch neural architectures.
+            The multi-layer perceptron <code>IGRModel</code> has shown to be rather robust on the examples, 
+            but lacked high-frequent detail and rather oversmoothed the surfaces as could be expected.
+        </p>
+        <p>    
+            The Multiresolution Hash Encoding was efficient to implement and fit, and could capture some
+            of the finer high-frequent detail but for our task at the cost of being prone to producing many artefacts
+            in the ambient space. This makes sense due to the strongly decorrelating nature of the
+            higher-frequent levels of the input encoding, making it difficult to smoothen out left-over
+            artefacts from initialization far from the surface by an Eikonal term in limited time.
+        </p>
+        <p>
+            The IDF Model is a promising approach for future research into combining the strengths of the two approaches. While
+            the direct joint training of base and displacement networks still led to considerable artefacts, 
+            the pretraining approach seemed much more stable and managed to add a little more detail
+            to the surface.
+        </p>
+    </div>
+
+    <div class="docs-section" id="references">
+        <h3 class="section-heading">References</h3>
+        <ul class="popover-list">
+            <li class="popover-item" id="1">
+                [1] Gropp, Amos and Yariv, Lior and Haim, Niv and Atzmon, Matan and Lipman, Yaron. 
+                "Implicit Geometric Regularization for Learning Shapes", 
+                <i>37th International Conference on Machine Learning (ICML), July 2020</i>.
+            </li>
+            <li class="popover-item" id="2">
+                [2] Müller, Thomas and Evans, Alex and Schied, Christoph and Keller, Alexander. 
+                "Instant Neural Graphics Primitives with a Multiresolution Hash Encoding", 
+                <i>ACM Transactions on Graphics (SIGGRAPH), July 2022</i>.
+            </li>
+            <li class="popover-item" id="3">
+                [3] Yifan, Wang and Rahmann, Lukas and Sorkine-Hornung, Olga. 
+                "Geometry-Consistent Neural Shape Representation with Implicit Displacement Fields", 
+                <i>10th International Conference on Learning Representations (ICLR), April 2022</i>.
+            </li>
+            <li class="popover-item" id="4">
+                [4] Takikawa, Towaki and Glassner, Andrew and McGuire, Morgan. 
+                "A Dataset and Explorer for 3D Signed Distance Functions", 
+                <i>Journal of Computer Graphics Techniques (JCGT), April 2022</i>.
+            </li>
+        </ul>
+    </div>
+
+</div>
+
